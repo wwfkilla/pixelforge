@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelForge</title>
+    <link rel="icon" id="favicon" type="image/png" href="data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAAAAMAtS9IAAAAQUVYSWZNTQAqAAAACAAFARIA">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#5c80bc">
+</head>
+<body>
+
+<header>
+    <div class="menu-bar">
+        <div style="font-weight: bold; color: var(--primary); margin-right: 15px; font-size: 0.9rem;">PixelForge</div>
+        
+        <div class="menu-item">
+            File
+            <div class="dropdown-menu">
+                <div class="dropdown-item" onclick="document.getElementById('new-project-modal').classList.add('open')">New Project <span class="shortcut"></span></div>
+                <div class="dropdown-item" onclick="editor.saveToFile()">Save Project (.pforge) <span class="shortcut">Ctrl+S</span></div>
+                <div class="dropdown-item" onclick="document.getElementById('project-upload').click()">Open Project...</div>
+                <input type="file" id="project-upload" hidden accept=".pforge">
+                <div class="dropdown-divider"></div>
+                <div id="mint-menu-item" class="dropdown-item" onclick="solanaManager.openMintModal()" style="display: none; color: var(--primary-hover); font-weight: bold;">💎 Mint NFT...</div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" onclick="document.getElementById('ref-upload').click()">Import Image...</div>
+                <input type="file" id="ref-upload" hidden accept="image/*">
+                <div class="dropdown-divider"></div>
+                <div class="submenu-trigger dropdown-item">
+                    Export ▸
+                    <div class="dropdown-menu submenu">
+                        <div class="dropdown-item" onclick="editor.exportPNG(1)">PNG (1x)</div>
+                        <div class="dropdown-item" onclick="editor.exportPNG(50)">PNG (50x)</div>
+                        <div class="dropdown-item" onclick="editor.exportSVG()">SVG</div>
+                        <div class="dropdown-item" onclick="editor.exportSpriteSheet()">Sprite Sheet</div>
+                        <div class="dropdown-item" onclick="editor.exportGIF()">GIF Animation</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-item">
+            Edit
+            <div class="dropdown-menu">
+                <div class="dropdown-item" onclick="editor.undo()">Undo <span class="shortcut">Ctrl+Z</span></div>
+                <div class="dropdown-item" onclick="editor.redo()">Redo <span class="shortcut">Ctrl+Y</span></div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" onclick="editor.cutSelection()">Cut <span class="shortcut">Ctrl+X</span></div>
+                <div class="dropdown-item" onclick="editor.copySelection()">Copy <span class="shortcut">Ctrl+C</span></div>
+                <div class="dropdown-item" onclick="editor.pasteSelection()">Paste <span class="shortcut">Ctrl+V</span></div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" onclick="editor.clearSelection()">Deselect <span class="shortcut">Ctrl+D</span></div>
+                <div class="dropdown-item" onclick="editor.frames[editor.currentFrameIndex][editor.currentLayerIndex].clear(); editor.render();">Clear Layer</div>
+                <div class="dropdown-item" onclick="editor.clearCanvas()">Clear Canvas</div>
+            </div>
+        </div>
+
+        <div class="menu-item">
+            View
+            <div class="dropdown-menu">
+                <div class="dropdown-item" onclick="editor.showGrid = !editor.showGrid; editor.drawGrid()">Toggle Grid <span class="shortcut">#</span></div>
+                <div class="dropdown-item" onclick="editor.zoomIn()">Zoom In <span class="shortcut">+</span></div>
+                <div class="dropdown-item" onclick="editor.zoomOut()">Zoom Out <span class="shortcut">-</span></div>
+                <div class="dropdown-item" onclick="editor.zoom = 1.0; editor.updateCanvasSize()">Reset Zoom <span class="shortcut"></span></div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" onclick="document.getElementById('onion-skin-toggle').click()">Toggle Onion Skin</div>
+            </div>
+        </div>
+
+        <div class="menu-item">
+            Canvas
+            <div class="dropdown-menu">
+                <div class="dropdown-item">
+                    Symmetry:
+                    <select id="symmetry-select-menu" style="margin-left: 10px; background: #111; color: white; border: 1px solid #444; font-size: 0.8rem;">
+                        <option value="none">None</option>
+                        <option value="horizontal">Horizontal</option>
+                        <option value="vertical">Vertical</option>
+                        <option value="radial">Radial</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-item">
+            Help
+            <div class="dropdown-menu">
+                <div class="dropdown-item" onclick="editor.showShortcuts()">Shortcuts</div>
+                <div class="dropdown-item" onclick="editor.showAbout()">About</div>
+            </div>
+        </div>
+    </div>
+
+            <div class="header-right">
+
+                <div class="project-title" contenteditable="true" title="Click to rename project">Untitled Project</div>
+
+                <div class="separator"></div>
+
+                <div id="zoom-display-header" title="Scroll or Click to change zoom">100%</div>
+
+                <div class="separator"></div>
+
+                        <div class="wallet-dropdown">
+
+                            <button id="connect-wallet-btn" class="small-btn" style="background: var(--primary);">Connect Wallet</button>
+
+                            <div id="wallet-menu" class="dropdown-menu" style="right: 0; left: auto; top: 30px;">
+
+                        <div class="dropdown-item" onclick="solanaManager.disconnect()">Disconnect</div>
+
+                    </div>
+
+                </div>
+
+            </div>
+</header>
+
+<main>
+    <div class="sidebar">
+        <!-- Tools -->
+        <div class="panel-section">
+            <div class="panel-title">Tools</div>
+            <div class="tool-grid">
+                <button class="tool-btn active" data-tool="pencil" title="Pencil (P)">✏️</button>
+                <button class="tool-btn" data-tool="eraser" title="Eraser (E)">
+                    <div style="width: 20px; height: 12px; background: #ff85a1; border: 1.5px solid #c9184a; border-radius: 2px; transform: rotate(-20deg); box-shadow: 1px 1px 0 rgba(0,0,0,0.2);"></div>
+                </button>
+                
+                <div class="tool-group">
+                    <button class="tool-btn" data-tool="select" id="active-selection-tool" title="Selection (S)">
+                        <div style="width: 16px; height: 16px; border: 1.5px dashed #fff; border-radius: 2px;"></div>
+                    </button>
+                    <div class="tool-variants">
+                        <div class="variant-item" onclick="editor.selectTool('select')" title="Rectangular Selection (S)">
+                            <div style="width: 14px; height: 14px; border: 1.2px dashed #fff; border-radius: 1px;"></div>
+                        </div>
+                        <div class="variant-item" onclick="editor.selectTool('lasso')" title="Lasso Selection (L)">🔗</div>
+                        <div class="variant-item" onclick="editor.selectTool('wand')" title="Magic Wand (W)">🪄</div>
+                    </div>
+                </div>
+
+                <button class="tool-btn" data-tool="bucket" title="Bucket Fill (B)">🪣</button>
+                <button class="tool-btn" data-tool="picker" title="Eyedropper (I)">
+                    <span style="display: inline-block; transform: scaleX(-1) rotate(180deg); font-size: 1.2rem;">💉</span>
+                </button>
+                <button class="tool-btn" data-tool="move" title="Move Layer (M)">✋</button>
+                <button class="tool-btn" data-tool="rectangle" title="Rectangle (Shift=Square, Alt=Center)">⬜</button>
+                <button class="tool-btn" data-tool="ellipse" title="Ellipse (Shift=Circle, Alt=Center)">⚪</button>
+                <button class="tool-btn" data-tool="dither" title="Dither Brush (🏁)">🏁</button>
+            </div>
+        </div>
+
+        <!-- Symmetry -->
+        <div class="panel-section">
+            <div class="panel-title">Symmetry</div>
+            <select id="symmetry-select" style="width: 100%;">
+                <option value="none">None</option>
+                <option value="horizontal">Horizontal (X)</option>
+                <option value="vertical">Vertical (Y)</option>
+                <option value="radial">Radial (XY)</option>
+            </select>
+            <div style="margin-top: 10px;">
+                <label><input type="checkbox" id="fill-shapes-toggle"> Fill Shapes</label>
+            </div>
+        </div>
+
+        <!-- Palette -->
+        <div class="panel-section">
+            <div class="panel-title">Color Selection</div>
+            
+            <div class="color-controls-ps">
+                <div class="color-squares-container">
+                    <div class="color-square secondary" id="secondary-color-view" title="Secondary Color (Right Click Swatch to Set)">
+                        <input type="color" id="secondary-color-picker" value="#ffffff">
+                    </div>
+                    <div class="color-square primary" id="primary-color-view" title="Primary Color (Left Click Swatch to Set)">
+                        <input type="color" id="custom-color-picker" value="#000000">
+                    </div>
+                    <button class="swap-colors-btn" onclick="editor.swapColors()" title="Swap Colors (X)">⇄</button>
+                </div>
+                <div class="color-info">
+                    <div id="hex-display">#000000</div>
+                </div>
+            </div>
+            <div id="recent-colors-list" class="recent-colors" title="Recent Colors">
+                <!-- Recent colors injected here -->
+            </div>
+        </div>
+
+        <!-- Tool Settings (Dynamic) -->
+        <div id="tool-settings-panel" class="panel-section" style="display: none;">
+            <div class="panel-title" id="settings-title">Tool Settings</div>
+            
+            <!-- Dither Settings -->
+            <div id="dither-settings" style="display: none;">
+                <div style="font-size: 0.75rem; margin-bottom: 5px;">Pattern:</div>
+                <div class="tool-grid" style="grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 10px;">
+                    <button class="small-btn dither-p-btn active" data-pattern="50" title="50% Checkerboard">🏁</button>
+                    <button class="small-btn dither-p-btn" data-pattern="25" title="25% Dots">⠂</button>
+                    <button class="small-btn dither-p-btn" data-pattern="75" title="75% Inverse Dots">⠿</button>
+                    <button class="small-btn dither-p-btn" data-pattern="v-line" title="Vertical Lines">||</button>
+                    <button class="small-btn dither-p-btn" data-pattern="h-line" title="Horizontal Lines">≡</button>
+                    <button class="small-btn dither-p-btn" data-pattern="diagonal" title="Diagonal Lines">\\</button>
+                </div>
+                <label style="font-size: 0.75rem;">Brush Size: <span id="brush-size-display">1</span>
+                    <input type="range" id="brush-size-slider" min="1" max="10" value="1">
+                </label>
+                <div style="margin-top: 5px;">
+                    <label style="font-size: 0.75rem; display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                        <input type="checkbox" id="dither-blend-toggle"> Use Secondary Color
+                    </label>
+                </div>
+            </div>
+
+            <!-- Brush Size for Pencil/Eraser -->
+            <div id="brush-size-settings" style="display: none;">
+                <label style="font-size: 0.75rem;">Brush Size: <span id="gen-brush-size-display">1</span>
+                    <input type="range" id="gen-brush-size-slider" min="1" max="10" value="1">
+                </label>
+                <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #333; padding-top: 10px;">
+                    <label style="font-size: 0.75rem; display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Automatically removes 'doubles' for cleaner line art">
+                        <input type="checkbox" id="pixel-perfect-toggle"> Pixel Perfect
+                    </label>
+                    <label style="font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px;">
+                        <span>Smoothing: <span id="smoothing-display">0</span></span>
+                        <input type="range" id="smoothing-slider" min="0" max="10" value="0">
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="workspace">
+        <div id="canvas-wrapper">
+            <canvas id="grid-canvas"></canvas>
+            <canvas id="drawing-canvas"></canvas>
+            <canvas id="cursor-canvas"></canvas>
+        </div>
+    </div>
+
+    <div class="sidebar right">
+        <!-- Layers -->
+        <div class="panel-section" style="flex: 1; display: flex; flex-direction: column;">
+            <div class="panel-title">
+                Layers
+                <button class="small-btn" onclick="editor.addLayer()">+</button>
+            </div>
+            <div id="layers-list" style="flex: 1; overflow-y: auto;">
+                <!-- Layer items injected here -->
+            </div>
+            <div style="margin-top: 10px;">
+                <label>Layer Opacity: <input type="range" id="layer-opacity" min="0" max="255" value="255"></label>
+            </div>
+        </div>
+
+        <!-- Preview -->
+        <div class="panel-section">
+            <div class="panel-title">Preview</div>
+            <div style="display: flex; justify-content: center; background: #fff; padding: 10px; border-radius: 4px;">
+                <canvas id="preview-canvas" width="128" height="128" style="background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNjY2MiLz48cmVjdCB4PSI0IiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjY2NjIi8+PC9zdmc+');"></canvas>
+            </div>
+        </div>
+    </div>
+</main>
+
+<div id="timeline">
+    <div class="timeline-controls">
+        <button onclick="editor.togglePlay()" id="play-btn">▶ Play</button>
+        <select id="loop-mode-select" style="background: #111; color: white; border: 1px solid #444; font-size: 0.8rem; padding: 2px 5px; border-radius: 3px;">
+            <option value="loop">Loop</option>
+            <option value="pingpong">Ping-Pong</option>
+            <option value="once">Play Once</option>
+        </select>
+        <label>FPS: <input type="range" min="1" max="30" value="12" id="fps-slider" style="width: 80px;"> <span id="fps-display">12</span></label>
+        <div style="width: 1px; height: 15px; background: var(--border);"></div>
+        <button onclick="editor.addFrame()">+ Frame</button>
+        <button onclick="editor.duplicateFrame()">Copy</button>
+        <button onclick="editor.deleteFrame()" style="color: var(--danger);">Delete</button>
+        <div class="separator"></div>
+        <div class="onion-wrapper">
+            <button id="onion-skin-btn" title="Toggle Onion Skin (O)">🧅 Onion Skin</button>
+            <div id="onion-skin-settings" class="onion-settings">
+                <div class="onion-input-group" title="Previous Frames">
+                    <span class="color-dot red"></span>
+                    <input type="number" id="onion-prev-input" value="1" min="0" max="5">
+                </div>
+                <div class="onion-input-group" title="Next Frames">
+                    <span class="color-dot green"></span>
+                    <input type="number" id="onion-next-input" value="1" min="0" max="5">
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="frames-container" id="frames-list">
+        <!-- Frames injected here -->
+    </div>
+</div>
+
+<div id="shortcuts-modal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="panel-title">Keyboard Shortcuts <button class="small-btn" onclick="this.closest('.modal').classList.remove('open')">×</button></div>
+        <div class="shortcuts-container">
+            <div class="shortcut-section">
+                <div class="section-header">Tools</div>
+                <div class="shortcut-row"><span>Pencil / Eraser</span> <div class="keys"><span class="key">P</span> <span class="key">E</span></div></div>
+                <div class="shortcut-row"><span>Select / Lasso / Wand</span> <div class="keys"><span class="key">S</span> <span class="key">L</span> <span class="key">W</span></div></div>
+                <div class="shortcut-row"><span>Bucket / Picker / Move</span> <div class="keys"><span class="key">B</span> <span class="key">I</span> <span class="key">M</span></div></div>
+                <div class="shortcut-row"><span>Rectangle / Ellipse</span> <div class="keys"><span class="key">R</span> <span class="key">C</span></div></div>
+                <div class="shortcut-row"><span>Dither Brush</span> <span class="key">D</span></div>
+            </div>
+            
+            <div class="shortcut-section">
+                <div class="section-header">Edit & Colors</div>
+                <div class="shortcut-row"><span>Undo / Redo</span> <div class="keys"><span class="key">Ctrl+Z</span> <span class="key">Ctrl+Y</span></div></div>
+                <div class="shortcut-row"><span>Cut / Copy / Paste</span> <div class="keys"><span class="key">Ctrl+X</span> <span class="key">Ctrl+C</span> <span class="key">Ctrl+V</span></div></div>
+                <div class="shortcut-row"><span>Deselect</span> <span class="key">Ctrl+D</span> / <span class="key">Esc</span></div>
+                <div class="shortcut-row"><span>Swap Colors</span> <span class="key">X</span></div>
+            </div>
+
+            <div class="shortcut-section">
+                <div class="section-header">Animation & View</div>
+                <div class="shortcut-row"><span>Play / Pause</span> <span class="key">Space</span></div>
+                <div class="shortcut-row"><span>Prev / Next Frame</span> <div class="keys"><span class="key">,</span> <span class="key">.</span></div></div>
+                <div class="shortcut-row"><span>Zoom In / Out</span> <div class="keys"><span class="key">+</span> <span class="key">-</span></div></div>
+                <div class="shortcut-row"><span>Toggle Grid</span> <span class="key">#</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="new-project-modal" class="modal">
+    <div class="modal-content">
+        <div class="panel-title">New Project <button class="small-btn" onclick="this.closest('.modal').classList.remove('open')">×</button></div>
+        
+        <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 15px;">
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">Project Name</label>
+                <input type="text" id="new-project-name" value="Untitled" style="width: 100%; padding: 8px;">
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="display: block; font-size: 0.9rem;">Dimension Presets</label>
+                <select id="new-project-size" style="width: 100%; padding: 8px;">
+                    <option value="16">16x16</option>
+                    <option value="32" selected>32x32</option>
+                    <option value="64">64x64</option>
+                    <option value="128">128x128</option>
+                    <option value="256">256x256</option>
+                    <option value="custom">Custom...</option>
+                </select>
+            </div>
+
+            <div id="custom-dimensions-area" style="display: none; gap: 15px; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 5px; font-size: 0.8rem; color: var(--text-muted);">Width (Max 300)</label>
+                    <input type="number" id="new-project-width" value="32" min="1" max="300" style="width: 100%;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 5px; font-size: 0.8rem; color: var(--text-muted);">Height (Max 300)</label>
+                    <input type="number" id="new-project-height" value="32" min="1" max="300" style="width: 100%;">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 15px;">
+                <div style="flex: 1;">
+                     <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">Background</label>
+                     <div style="display: flex; gap: 10px; align-items: center; height: 35px;">
+                        <input type="color" id="new-project-bg-color" value="#ffffff" style="height: 100%; flex: 1; cursor: pointer;">
+                        <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                            <input type="checkbox" id="new-project-bg-transparent"> Transparent
+                        </label>
+                     </div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                <button onclick="this.closest('.modal').classList.remove('open')" style="background: transparent; border: none; color: var(--text-muted);">Cancel</button>
+                <button onclick="editor.createNewProjectFromModal()" class="active">Create Project</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="mint-nft-modal" class="modal">
+    <div class="modal-content">
+        <div class="panel-title">Mint NFT (Solana Devnet) <button class="small-btn" onclick="solanaManager.closeMintModal()">×</button></div>
+        
+        <!-- Initial Form View -->
+        <div id="mint-initial-view" style="display: flex; flex-direction: column; gap: 15px; margin-top: 15px;">
+            <div style="display: flex; gap: 15px; align-items: flex-start;">
+                <div id="mint-preview-container" style="width: 100px; height: 100px; background-color: #111; border: 1px solid var(--border); border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                    <img id="mint-preview-img" style="width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; display: block;">
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.8rem; color: var(--text-muted);">NFT Name</label>
+                        <input type="text" id="nft-name" placeholder="e.g. Pixel Warrior #1" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.8rem; color: var(--text-muted);">Symbol</label>
+                        <input type="text" id="nft-symbol" placeholder="e.g. FORGE" maxlength="10" style="width: 100%;">
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-size: 0.8rem; color: var(--text-muted);">Description</label>
+                <textarea id="nft-description" rows="3" placeholder="Tell the story of your artwork..." style="width: 100%; background: #111; color: white; border: 1px solid var(--border); border-radius: 3px; padding: 8px; font-family: inherit; resize: none;"></textarea>
+            </div>
+
+            <div style="background: rgba(92, 128, 188, 0.1); border: 1px dashed var(--primary); padding: 10px; border-radius: 4px; font-size: 0.8rem;">
+                <div style="color: var(--primary-hover); font-weight: bold; margin-bottom: 4px;">Next Steps:</div>
+                <ol style="margin: 0; padding-left: 20px; color: var(--text-main);">
+                    <li>Upload image to IPFS/Arweave</li>
+                    <li>Generate Metadata JSON</li>
+                    <li>Sign transaction with Phantom</li>
+                </ol>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 5px;">
+                <button onclick="solanaManager.closeMintModal()" style="background: transparent; border: none; color: var(--text-muted);">Cancel</button>
+                <button id="start-mint-btn" class="active" onclick="solanaManager.startMetadataUpload()">Prepare & Upload</button>
+            </div>
+            
+            <div id="mint-status" style="display: none; font-size: 0.8rem; text-align: center; color: var(--primary-hover); border-top: 1px solid var(--border); padding-top: 10px;">
+                Status: <span id="mint-status-text">Idle</span>
+            </div>
+        </div>
+
+        <!-- Success View -->
+        <div id="mint-success-view" style="display: none; flex-direction: column; gap: 15px; margin-top: 15px;">
+            <div style="text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 10px;">🎉</div>
+                <div style="color: var(--success); font-weight: bold; font-size: 1.2rem;">Mint Successful!</div>
+                <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Your artwork is now on the blockchain.</div>
+            </div>
+
+            <div style="background: #111; border: 1px solid var(--border); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <label style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Mint Address</label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <code id="success-mint-address" style="flex: 1; font-size: 0.8rem; color: var(--primary-hover); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Address...</code>
+                    <button class="small-btn" onclick="solanaManager.copyMintAddress(this)" title="Copy to Clipboard">📋</button>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <a id="success-tx-link" href="#" target="_blank" class="active" style="text-align: center; text-decoration: none; padding: 10px; border-radius: 4px; display: block;">View Transaction</a>
+                <button onclick="solanaManager.closeMintModal()" style="background: transparent; border: none; color: var(--text-muted);">Back to Editor</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="about-modal" class="modal">
+    <div class="modal-content" style="text-align: center;">
+        <div class="panel-title">About PixelForge <button class="small-btn" onclick="this.closest('.modal').classList.remove('open')">×</button></div>
+        <div style="font-size: 1.5rem; color: var(--primary); font-weight: bold; margin: 15px 0;">PixelForge</div>
+        <div style="margin-bottom: 20px;">Version 1.0.0</div>
+        
+        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+            <a href="https://pixelforge.art" target="_blank" style="color: var(--primary-hover); text-decoration: none;">🌐 pixelforge.art</a>
+            <div style="display: flex; gap: 15px;">
+                <a href="https://twitter.com/wwfkilla" target="_blank" style="color: var(--text-main); text-decoration: none;">Twitter</a>
+                <a href="https://github.com/wwfkilla" target="_blank" style="color: var(--text-main); text-decoration: none;">GitHub</a>
+                <a href="https://instagram.com/wwfkilla" target="_blank" style="color: var(--text-main); text-decoration: none;">Instagram</a>
+            </div>
+            <div class="dropdown-divider" style="width: 100%;"></div>
+            <a href="https://www.buymeacoffee.com/wwfkilla" target="_blank" class="coffee-btn">
+                ☕ Buy me a coffee
+            </a>
+        </div>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+<script src="js/irys.js"></script>
+<script src="js/SolanaManager.js?v=2"></script>
+<script src="js/GIFEncoder.js?v=2"></script>
+<script src="js/PixelEditor.js?v=2"></script>
+<script src="js/main.js?v=2"></script>
+</body>
+</html>

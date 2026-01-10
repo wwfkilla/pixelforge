@@ -34,6 +34,11 @@ class PixelEditor {
         this.zoom = 1.0;
         this.pixelPerfect = false;
         this.smoothing = 0;
+        
+        // Independent Tool Settings
+        this.pencilSettings = { size: 1, pixelPerfect: false, smoothing: 0 };
+        this.eraserSettings = { size: 1, pixelPerfect: false, smoothing: 0 };
+        
         this.smoothPos = { x: 0, y: 0 };
         this.strokePath = []; // Track points for pixel-perfect
         this.isAddingToSelection = false; // Capture shift state at start of drag
@@ -260,7 +265,27 @@ class PixelEditor {
         if (this.tool === 'move' && this.floatingBuffer) {
             this.commitMoveSelection();
         }
+
+        // Save current settings to the previous tool
+        if (this.tool === 'pencil') {
+            this.pencilSettings = { size: this.brushSize, pixelPerfect: this.pixelPerfect, smoothing: this.smoothing };
+        } else if (this.tool === 'eraser') {
+            this.eraserSettings = { size: this.brushSize, pixelPerfect: this.pixelPerfect, smoothing: this.smoothing };
+        }
+
         this.tool = tool;
+
+        // Load settings for the new tool
+        if (this.tool === 'pencil') {
+            this.brushSize = this.pencilSettings.size;
+            this.pixelPerfect = this.pencilSettings.pixelPerfect;
+            this.smoothing = this.pencilSettings.smoothing;
+        } else if (this.tool === 'eraser') {
+            this.brushSize = this.eraserSettings.size;
+            this.pixelPerfect = this.eraserSettings.pixelPerfect;
+            this.smoothing = this.eraserSettings.smoothing;
+        }
+
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tool === tool);
         });
@@ -284,6 +309,25 @@ class PixelEditor {
 
         this.updateCursorClass();
         this.updateToolSettingsUI();
+        this.syncToolSettingsUI();
+    }
+
+    syncToolSettingsUI() {
+        const brushSizeSlider = document.getElementById('gen-brush-size-slider');
+        const brushSizeDisplay = document.getElementById('gen-brush-size-display');
+        const pixelPerfectToggle = document.getElementById('pixel-perfect-toggle');
+        const smoothingSlider = document.getElementById('smoothing-slider');
+        const smoothingDisplay = document.getElementById('smoothing-display');
+
+        if (brushSizeSlider) {
+            brushSizeSlider.value = this.brushSize;
+            if (brushSizeDisplay) brushSizeDisplay.innerText = this.brushSize;
+        }
+        if (pixelPerfectToggle) pixelPerfectToggle.checked = this.pixelPerfect;
+        if (smoothingSlider) {
+            smoothingSlider.value = this.smoothing;
+            if (smoothingDisplay) smoothingDisplay.innerText = this.smoothing;
+        }
     }
 
     /* --- Drawing Logic --- */
@@ -380,6 +424,23 @@ class PixelEditor {
             this.saveState();
             this.updateUI();
         }
+    }
+
+    selectLayerAlpha(idx) {
+        const layer = this.layers[idx];
+        const frame = this.frames[this.currentFrameIndex][idx];
+        this.selection = new Set();
+        
+        for (const [key, p] of frame) {
+            const [lx, ly] = key.split(',').map(Number);
+            const sx = lx + layer.x;
+            const sy = ly + layer.y;
+            this.selection.add(`${sx},${sy}`);
+        }
+        
+        this.hasSelection = this.selection.size > 0;
+        this.render();
+        this.showToast(`Selected layer content (${this.selection.size} pixels)`);
     }
 
     /* --- Drawing Logic --- */
@@ -488,13 +549,16 @@ class PixelEditor {
                     const p2 = this.strokePath[this.strokePath.length - 2];
                     const p3 = this.strokePath[this.strokePath.length - 1];
                     
-                    if (p1.x === p3.x || p1.y === p3.y) {
-                        // Orthogonally connected? Then p2 is a double
-                        if (Math.abs(p1.x - p3.x) + Math.abs(p1.y - p3.y) === 1) {
-                             // Erase p2
-                             this.setPixel(p2.x, p2.y, 0);
-                             this.strokePath.splice(this.strokePath.length - 2, 1);
-                        }
+                    // If p1 and p3 are neighbors (touching by side or corner), then p2 is a double
+                    if (Math.abs(p1.x - p3.x) <= 1 && Math.abs(p1.y - p3.y) <= 1) {
+                         // Erase p2 from the frame Map directly to avoid recursive applyTool calls
+                         const layerIdx = this.currentLayerIndex;
+                         const layer = this.layers[layerIdx];
+                         const frame = this.frames[this.currentFrameIndex][layerIdx];
+                         frame.delete(`${p2.x - layer.x},${p2.y - layer.y}`);
+                         
+                         // Remove p2 from history of this stroke
+                         this.strokePath.splice(this.strokePath.length - 2, 1);
                     }
                 }
             }
@@ -843,9 +907,18 @@ class PixelEditor {
             if(this.getPixel(x, y) !== targetColor) continue;
             const points = this.getSymmetryPoints(x, y);
             points.forEach(p => this.setPixel(p.x, p.y, fillColor));
-            [[x+1, y], [x-1, y], [x, y+1], [x, y-1]].forEach(([nx, ny]) => {
-                if(nx >= -100 && nx < this.gridWidth+100 && ny >= -100 && ny < this.gridHeight+100) queue.push([nx, ny]);
-            });
+            
+            // 8-way connectivity (orthogonal + diagonal)
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if(nx >= -100 && nx < this.gridWidth+100 && ny >= -100 && ny < this.gridHeight+100) {
+                        queue.push([nx, ny]);
+                    }
+                }
+            }
         }
     }
 
@@ -1966,11 +2039,14 @@ class PixelEditor {
                 this.reorderLayers(fromIdx, toIdx);
             };
 
-            item.onclick = () => { 
-                if (this.currentLayerIndex !== idx) { 
+            item.onclick = (e) => { 
+                if (e.ctrlKey || e.metaKey) {
+                    this.selectLayerAlpha(idx);
+                } else if (this.currentLayerIndex !== idx) { 
                     this.currentLayerIndex = idx; 
                     this.render(); // Ensure onion skin updates to new active layer
                     this.updateUI(); 
+                    this.syncToolSettingsUI();
                 } 
             };
             
@@ -2247,10 +2323,7 @@ class PixelEditor {
             else if (ctrl && key === 'c') { e.preventDefault(); this.copySelection(); }
             else if (ctrl && key === 'v') { e.preventDefault(); this.pasteSelection(); }
             else if (ctrl && key === 'd') { e.preventDefault(); this.clearSelection(); }
-            else if (key === 'escape') { 
-                this.clearSelection(); 
-                document.querySelectorAll('.modal').forEach(m => m.classList.remove('open'));
-            }
+            else if (ctrl && key === '0') { e.preventDefault(); this.zoom = 1.0; this.updateCanvasSize(); }
             else if (key === '+' || key === '=') { this.zoomIn(); }
             else if (key === '-') { this.zoomOut(); }
             else if (key === ',') { 
@@ -2305,6 +2378,7 @@ class PixelEditor {
                 brushSizeDisplay.innerText = this.brushSize;
                 if (genBrushSizeSlider) genBrushSizeSlider.value = this.brushSize;
                 if (genBrushSizeDisplay) genBrushSizeDisplay.innerText = this.brushSize;
+                this.updateActiveToolSettings();
             };
         }
 
@@ -2314,6 +2388,7 @@ class PixelEditor {
                 genBrushSizeDisplay.innerText = this.brushSize;
                 if (brushSizeSlider) brushSizeSlider.value = this.brushSize;
                 if (brushSizeDisplay) brushSizeDisplay.innerText = this.brushSize;
+                this.updateActiveToolSettings();
             };
         }
 
@@ -2394,7 +2469,10 @@ class PixelEditor {
 
         const pixelPerfectToggle = document.getElementById('pixel-perfect-toggle');
         if (pixelPerfectToggle) {
-            pixelPerfectToggle.onchange = (e) => { this.pixelPerfect = e.target.checked; };
+            pixelPerfectToggle.onchange = (e) => { 
+                this.pixelPerfect = e.target.checked; 
+                this.updateActiveToolSettings();
+            };
         }
 
         const smoothingSlider = document.getElementById('smoothing-slider');
@@ -2403,7 +2481,16 @@ class PixelEditor {
             smoothingSlider.oninput = (e) => {
                 this.smoothing = parseInt(e.target.value);
                 if (smoothingDisplay) smoothingDisplay.innerText = this.smoothing;
+                this.updateActiveToolSettings();
             };
+        }
+    }
+
+    updateActiveToolSettings() {
+        if (this.tool === 'pencil') {
+            this.pencilSettings = { size: this.brushSize, pixelPerfect: this.pixelPerfect, smoothing: this.smoothing };
+        } else if (this.tool === 'eraser') {
+            this.eraserSettings = { size: this.brushSize, pixelPerfect: this.pixelPerfect, smoothing: this.smoothing };
         }
     }
 }

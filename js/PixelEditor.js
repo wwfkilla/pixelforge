@@ -728,7 +728,7 @@ class PixelEditor {
             const max = Math.max(w, h), dirX = ex >= sx ? 1 : -1, dirY = ey >= sy ? 1 : -1;
             ex = sx + (max - 1) * dirX; ey = sy + (max - 1) * dirY;
         }
-        const minX = Math.max(0, Math.min(sx, ex)), maxX = Math.min(this.gridSize - 1, Math.max(sx, ex)), minY = Math.max(0, Math.min(sy, ey)), maxY = Math.min(this.gridSize - 1, Math.max(sy, ey));
+        const minX = Math.max(-100, Math.min(sx, ex)), maxX = Math.min(this.gridWidth + 100, Math.max(sx, ex)), minY = Math.max(-100, Math.min(sy, ey)), maxY = Math.min(this.gridHeight + 100, Math.max(sy, ey));
         const pixels = [];
         if (tool === 'rectangle') {
             if (this.fillShapes) {
@@ -765,8 +765,8 @@ class PixelEditor {
         
         // Use a temporary canvas to fill the polygon and read back pixels
         const canvas = document.createElement('canvas');
-        canvas.width = this.gridSize;
-        canvas.height = this.gridSize;
+        canvas.width = this.gridWidth;
+        canvas.height = this.gridHeight;
         const ctx = canvas.getContext('2d');
         
         ctx.fillStyle = 'white';
@@ -778,15 +778,15 @@ class PixelEditor {
         ctx.closePath();
         ctx.fill();
         
-        const imgData = ctx.getImageData(0, 0, this.gridSize, this.gridSize);
+        const imgData = ctx.getImageData(0, 0, this.gridWidth, this.gridHeight);
         const data = imgData.data;
         const pixels = [];
         
         for (let i = 0; i < data.length / 4; i++) {
             if (data[i * 4] > 128) {
                 pixels.push({
-                    x: i % this.gridSize,
-                    y: Math.floor(i / this.gridSize)
+                    x: i % this.gridWidth,
+                    y: Math.floor(i / this.gridWidth)
                 });
             }
         }
@@ -804,7 +804,7 @@ class PixelEditor {
 
     getSymmetryPoints(x, y) {
         const points = [{x, y}];
-        const w = this.gridSize, h = this.gridSize;
+        const w = this.gridWidth, h = this.gridHeight;
         if (this.symmetry === 'horizontal' || this.symmetry === 'radial') points.push({ x: w - 1 - x, y: y });
         if (this.symmetry === 'vertical' || this.symmetry === 'radial') points.push({ x: x, y: h - 1 - y });
         if (this.symmetry === 'radial') points.push({ x: w - 1 - x, y: h - 1 - y });
@@ -844,7 +844,7 @@ class PixelEditor {
             const points = this.getSymmetryPoints(x, y);
             points.forEach(p => this.setPixel(p.x, p.y, fillColor));
             [[x+1, y], [x-1, y], [x, y+1], [x, y-1]].forEach(([nx, ny]) => {
-                if(nx >= -100 && nx < this.gridSize+100 && ny >= -100 && ny < this.gridSize+100) queue.push([nx, ny]);
+                if(nx >= -100 && nx < this.gridWidth+100 && ny >= -100 && ny < this.gridHeight+100) queue.push([nx, ny]);
             });
         }
     }
@@ -866,7 +866,7 @@ class PixelEditor {
             if (processed.has(key)) continue;
             processed.add(key);
             
-            if (x < 0 || x >= this.gridSize || y < 0 || y >= this.gridSize) continue;
+            if (x < -100 || x >= this.gridWidth + 100 || y < -100 || y >= this.gridHeight + 100) continue;
             if (this.getPixel(x, y) !== targetColor) continue;
             
             this.selection.add(key);
@@ -966,6 +966,15 @@ class PixelEditor {
         this.selection = null;
         this.hasSelection = false;
         this.drawCursor(-1, -1);
+    }
+
+    clearLayer() {
+        if (!confirm("Clear current layer?")) return;
+        this.saveState();
+        this.frames[this.currentFrameIndex][this.currentLayerIndex].clear();
+        this.render();
+        this.isDirty = true;
+        this.showToast("Layer cleared", "danger");
     }
 
     clearCanvas() {
@@ -1085,20 +1094,6 @@ class PixelEditor {
         
         // Render Floating Buffer (Selection Move)
         if (this.floatingBuffer) {
-            const offscreen = document.createElement('canvas'); 
-            offscreen.width = this.gridSize; 
-            offscreen.height = this.gridSize;
-            const offCtx = offscreen.getContext('2d');
-            const imgData = offCtx.createImageData(this.gridSize, this.gridSize);
-            const data = imgData.data;
-            
-            // Calculate relative offset for drawing to offscreen canvas
-            // We want to draw the floating pixels onto a temporary canvas.
-            // Since floatingBuffer keys are global screen coords, we need to shift them
-            // so they fit on the offscreen canvas IF we want to use drawImage.
-            // BUT: simple drawImage won't work easily if pixels are far off screen.
-            // BETTER: Direct render to screen context.
-            
             this.ctxDraw.save();
             this.ctxDraw.globalAlpha = 0.6; // Ghosting effect
             
@@ -1108,7 +1103,7 @@ class PixelEditor {
                 const ny = sy + this.floatingBufferY;
                 
                 // Only draw if visible on screen
-                if (nx >= 0 && nx < this.gridSize && ny >= 0 && ny < this.gridSize) {
+                if (nx >= 0 && nx < this.gridWidth && ny >= 0 && ny < this.gridHeight) {
                      this.ctxDraw.fillStyle = this.intToHex(p);
                      this.ctxDraw.fillRect(nx * this.pixelScale, ny * this.pixelScale, this.pixelScale, this.pixelScale);
                 }
@@ -1140,8 +1135,8 @@ class PixelEditor {
     renderOnionSkinFrame(frameIdx, tintColor, globalAlpha) {
         const frame = this.frames[frameIdx];
         if (!frame) return;
-        const offscreen = document.createElement('canvas'); offscreen.width = this.gridSize; offscreen.height = this.gridSize;
-        const offCtx = offscreen.getContext('2d'), imgData = offCtx.createImageData(this.gridSize, this.gridSize), data = imgData.data;
+        const offscreen = document.createElement('canvas'); offscreen.width = this.gridWidth; offscreen.height = this.gridHeight;
+        const offCtx = offscreen.getContext('2d'), imgData = offCtx.createImageData(this.gridWidth, this.gridHeight), data = imgData.data;
         
         // Render ONLY the active layer for onion skin (less clutter)
         const l = this.currentLayerIndex;
@@ -1153,8 +1148,8 @@ class PixelEditor {
             for (const [key, p] of pixels) {
                 const [lx, ly] = key.split(',').map(Number);
                 const cx = lx + ox, cy = ly + oy;
-                if (cx >= 0 && cx < this.gridSize && cy >= 0 && cy < this.gridSize) {
-                    const idx = (cy * this.gridSize + cx) * 4;
+                if (cx >= 0 && cx < this.gridWidth && cy >= 0 && cy < this.gridHeight) {
+                    const idx = (cy * this.gridWidth + cx) * 4;
                     data[idx] = tintColor[0];
                     data[idx+1] = tintColor[1];
                     data[idx+2] = tintColor[2];
@@ -1166,15 +1161,15 @@ class PixelEditor {
         offCtx.putImageData(imgData, 0, 0); 
         this.ctxDraw.save(); 
         this.ctxDraw.imageSmoothingEnabled = false;
-        this.ctxDraw.drawImage(offscreen, 0, 0, this.gridSize * this.pixelScale, this.gridSize * this.pixelScale); 
+        this.ctxDraw.drawImage(offscreen, 0, 0, this.gridWidth * this.pixelScale, this.gridHeight * this.pixelScale); 
         this.ctxDraw.restore();
     }
 
     renderFrameToContext(frameIdx, ctx, globalAlpha) {
         const frame = this.frames[frameIdx];
         if (!frame) return;
-        const offscreen = document.createElement('canvas'); offscreen.width = this.gridSize; offscreen.height = this.gridSize;
-        const offCtx = offscreen.getContext('2d'), imgData = offCtx.createImageData(this.gridSize, this.gridSize), data = imgData.data; 
+        const offscreen = document.createElement('canvas'); offscreen.width = this.gridWidth; offscreen.height = this.gridHeight;
+        const offCtx = offscreen.getContext('2d'), imgData = offCtx.createImageData(this.gridWidth, this.gridHeight), data = imgData.data; 
         
         for (let l = this.layers.length - 1; l >= 0; l--) {
             const layerMeta = this.layers[l]; if (!layerMeta.visible) continue;
@@ -1212,15 +1207,15 @@ class PixelEditor {
                     if (!maskPixels.has(`${mx},${my}`)) continue;
                 }
 
-                if (sx >= 0 && sx < this.gridSize && sy >= 0 && sy < this.gridSize) {
-                    const r = p & 0xFF, g = (p >> 8) & 0xFF, b = (p >> 16) & 0xFF, baseIdx = (sy * this.gridSize + sx) * 4;
+                if (sx >= 0 && sx < this.gridWidth && sy >= 0 && sy < this.gridHeight) {
+                    const r = p & 0xFF, g = (p >> 8) & 0xFF, b = (p >> 16) & 0xFF, baseIdx = (sy * this.gridWidth + sx) * 4;
                     // Note: Simplified blending (overwrite) to match previous implementation
                     data[baseIdx] = r; data[baseIdx+1] = g; data[baseIdx+2] = b; data[baseIdx+3] = 255 * opacity;
                 }
             }
         }
         offCtx.putImageData(imgData, 0, 0); ctx.save(); ctx.globalAlpha = 1.0; ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(offscreen, 0, 0, this.gridSize * this.pixelScale, this.gridSize * this.pixelScale); ctx.restore();
+        ctx.drawImage(offscreen, 0, 0, this.gridWidth * this.pixelScale, this.gridHeight * this.pixelScale); ctx.restore();
     }
 
     toggleLayerClip(idx) {
@@ -1234,16 +1229,16 @@ class PixelEditor {
 
     updatePreview() {
         const ctx = this.ctxPreview; ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-        const offscreen = document.createElement('canvas'); offscreen.width = this.gridSize; offscreen.height = this.gridSize;
-        const offCtx = offscreen.getContext('2d'), imgData = offCtx.createImageData(this.gridSize, this.gridSize), data = imgData.data, frame = this.frames[this.currentFrameIndex];
+        const offscreen = document.createElement('canvas'); offscreen.width = this.gridWidth; offscreen.height = this.gridHeight;
+        const offCtx = offscreen.getContext('2d'), imgData = offCtx.createImageData(this.gridWidth, this.gridHeight), data = imgData.data, frame = this.frames[this.currentFrameIndex];
         for (let l = this.layers.length - 1; l >= 0; l--) {
             const layer = this.layers[l]; if (!layer.visible) continue;
             const pixels = frame[l], ox = layer.x || 0, oy = layer.y || 0;
             for (const [key, p] of pixels) {
                 const [lx, ly] = key.split(',').map(Number);
                 const cx = lx + ox, cy = ly + oy;
-                if (cx >= 0 && cx < this.gridSize && cy >= 0 && cy < this.gridSize) {
-                    const idx = (cy * this.gridSize + cx) * 4;
+                if (cx >= 0 && cx < this.gridWidth && cy >= 0 && cy < this.gridHeight) {
+                    const idx = (cy * this.gridWidth + cx) * 4;
                     data[idx] = p & 0xFF; data[idx+1] = (p >> 8) & 0xFF; data[idx+2] = (p >> 16) & 0xFF; data[idx+3] = 255;
                 }
             }
@@ -1257,14 +1252,14 @@ class PixelEditor {
             const idx = parseInt(cvs.dataset.index);
             if (idx === this.currentLayerIndex) {
                 const ctx = cvs.getContext('2d');
-                const imgData = ctx.createImageData(this.gridSize, this.gridSize);
+                const imgData = ctx.createImageData(this.gridWidth, this.gridHeight);
                 const data = imgData.data;
                 const pixels = this.frames[this.currentFrameIndex][idx];
                 
                 for (const [key, p] of pixels) {
                     const [lx, ly] = key.split(',').map(Number);
-                    if (lx >= 0 && lx < this.gridSize && ly >= 0 && ly < this.gridSize) {
-                        const b = (ly * this.gridSize + lx) * 4;
+                    if (lx >= 0 && lx < this.gridWidth && ly >= 0 && ly < this.gridHeight) {
+                        const b = (ly * this.gridWidth + lx) * 4;
                         data[b] = p & 0xFF;
                         data[b+1] = (p >> 8) & 0xFF;
                         data[b+2] = (p >> 16) & 0xFF;
@@ -1282,7 +1277,7 @@ class PixelEditor {
         if (!cvs) return;
 
         const ctx = cvs.getContext('2d');
-        const imgData = ctx.createImageData(this.gridSize, this.gridSize);
+        const imgData = ctx.createImageData(this.gridWidth, this.gridHeight);
         const data = imgData.data;
         const frame = this.frames[this.currentFrameIndex];
 
@@ -1296,8 +1291,8 @@ class PixelEditor {
                 const [lx, ly] = key.split(',').map(Number);
                 const cx = lx + ox;
                 const cy = ly + oy;
-                if (cx >= 0 && cx < this.gridSize && cy >= 0 && cy < this.gridSize) {
-                    const base = (cy * this.gridSize + cx) * 4;
+                if (cx >= 0 && cx < this.gridWidth && cy >= 0 && cy < this.gridHeight) {
+                    const base = (cy * this.gridWidth + cx) * 4;
                     data[base] = p & 0xFF;
                     data[base+1] = (p >> 8) & 0xFF;
                     data[base+2] = (p >> 16) & 0xFF;
@@ -1345,16 +1340,16 @@ class PixelEditor {
             const num = document.createElement('div'); num.className = 'frame-num'; num.innerText = idx + 1;
             div.appendChild(num); const cvs = document.createElement('canvas'); 
             cvs.dataset.index = idx;
-            cvs.width = this.gridSize; cvs.height = this.gridSize;
-            const ctx = cvs.getContext('2d'), imgData = ctx.createImageData(this.gridSize, this.gridSize), data = imgData.data, frame = this.frames[idx];
+            cvs.width = this.gridWidth; cvs.height = this.gridHeight;
+            const ctx = cvs.getContext('2d'), imgData = ctx.createImageData(this.gridWidth, this.gridHeight), data = imgData.data, frame = this.frames[idx];
             for (let l = this.layers.length - 1; l >= 0; l--) {
                 const layer = this.layers[l]; if (!layer.visible) continue;
                 const pixels = frame[l], ox = layer.x || 0, oy = layer.y || 0;
                 for (const [key, p] of pixels) {
                     const [lx, ly] = key.split(',').map(Number);
                     const cx = lx + ox, cy = ly + oy;
-                    if (cx >= 0 && cx < this.gridSize && cy >= 0 && cy < this.gridSize) {
-                        const base = (cy * this.gridSize + cx) * 4;
+                    if (cx >= 0 && cx < this.gridWidth && cy >= 0 && cy < this.gridHeight) {
+                        const base = (cy * this.gridWidth + cx) * 4;
                         data[base] = p&0xFF; data[base+1]=(p>>8)&0xFF; data[base+2]=(p>>16)&0xFF; data[base+3]=255;
                     }
                 }
@@ -1399,16 +1394,17 @@ class PixelEditor {
                 const lx = sx + offsetX;
                 const ly = sy + offsetY;
                 
-                if (lx >= 0 && lx < this.gridSize && ly >= 0 && ly < this.gridSize) {
+                if (lx >= -100 && lx < this.gridWidth + 100 && ly >= -100 && ly < this.gridHeight + 100) {
                     ctx.fillRect(lx * this.pixelScale, ly * this.pixelScale, this.pixelScale, this.pixelScale);
                 }
             }
         }
 
         ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)'; ctx.lineWidth = 1;
-        const half = (this.gridSize * this.pixelScale) / 2;
-        if (this.symmetry === 'vertical' || this.symmetry === 'radial') { ctx.beginPath(); ctx.moveTo(half, 0); ctx.lineTo(half, ctx.canvas.height); ctx.stroke(); }
-        if (this.symmetry === 'horizontal' || this.symmetry === 'radial') { ctx.beginPath(); ctx.moveTo(0, half); ctx.lineTo(ctx.canvas.width, half); ctx.stroke(); }
+        const halfX = (this.gridWidth * this.pixelScale) / 2;
+        const halfY = (this.gridHeight * this.pixelScale) / 2;
+        if (this.symmetry === 'vertical' || this.symmetry === 'radial') { ctx.beginPath(); ctx.moveTo(halfX, 0); ctx.lineTo(halfX, ctx.canvas.height); ctx.stroke(); }
+        if (this.symmetry === 'horizontal' || this.symmetry === 'radial') { ctx.beginPath(); ctx.moveTo(0, halfY); ctx.lineTo(ctx.canvas.width, halfY); ctx.stroke(); }
         
         if (this.isDrawing && this.tool === 'select') {
             // Draw dashed selection box (Black and White for visibility on any BG)
@@ -1481,14 +1477,14 @@ class PixelEditor {
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
-                const tempCvs = document.createElement('canvas'); tempCvs.width = this.gridSize; tempCvs.height = this.gridSize;
-                const ctx = tempCvs.getContext('2d'); ctx.drawImage(img, 0, 0, this.gridSize, this.gridSize);
-                const imgData = ctx.getImageData(0, 0, this.gridSize, this.gridSize), data = imgData.data, pixelData = new Map();
+                const tempCvs = document.createElement('canvas'); tempCvs.width = this.gridWidth; tempCvs.height = this.gridHeight;
+                const ctx = tempCvs.getContext('2d'); ctx.drawImage(img, 0, 0, this.gridWidth, this.gridHeight);
+                const imgData = ctx.getImageData(0, 0, this.gridWidth, this.gridHeight), data = imgData.data, pixelData = new Map();
                 for(let i=0; i< (data.length / 4); i++) {
                     const r = data[i*4], g = data[i*4+1], b = data[i*4+2], a = data[i*4+3];
                     if (a > 50) {
-                        const lx = i % this.gridSize;
-                        const ly = Math.floor(i / this.gridSize);
+                        const lx = i % this.gridWidth;
+                        const ly = Math.floor(i / this.gridWidth);
                         pixelData.set(`${lx},${ly}`, (255 << 24) | (b << 16) | (g << 8) | r);
                     }
                 }
@@ -1842,7 +1838,7 @@ class PixelEditor {
         if (scale === 1) {
             const link = document.createElement('a'); link.download = `${name}.png`; link.href = rawCanvas.toDataURL(); link.click();
         } else {
-            const cvs = document.createElement('canvas'); cvs.width = this.gridSize * scale; cvs.height = this.gridSize * scale;
+            const cvs = document.createElement('canvas'); cvs.width = this.gridWidth * scale; cvs.height = this.gridHeight * scale;
             const ctx = cvs.getContext('2d'); ctx.imageSmoothingEnabled = false;
             ctx.drawImage(rawCanvas, 0, 0, cvs.width, cvs.height);
             const link = document.createElement('a'); link.download = `${name}-x${scale}.png`; link.href = cvs.toDataURL(); link.click();
@@ -1851,9 +1847,10 @@ class PixelEditor {
 
     exportSVG() {
         const scale = 50;
-        const size = this.gridSize * scale;
+        const width = this.gridWidth * scale;
+        const height = this.gridHeight * scale;
         const name = this.getProjectName();
-        let svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">`;
+        let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">`;
         const frame = this.frames[this.currentFrameIndex];
         
         for (let l = this.layers.length - 1; l >= 0; l--) {
@@ -1869,7 +1866,7 @@ class PixelEditor {
                 const cx = (lx + ox) * scale;
                 const cy = (ly + oy) * scale;
                 
-                if (cx >= 0 && cx < size && cy >= 0 && cy < size) {
+                if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
                     const r = p & 0xFF;
                     const g = (p >> 8) & 0xFF;
                     const b = (p >> 16) & 0xFF;
@@ -1885,19 +1882,19 @@ class PixelEditor {
         if (this.frames.length === 0) return;
         const name = this.getProjectName();
         const count = this.frames.length, cols = Math.ceil(Math.sqrt(count)), rows = Math.ceil(count / cols);
-        const sheet = document.createElement('canvas'); sheet.width = cols * this.gridSize; sheet.height = rows * this.gridSize;
+        const sheet = document.createElement('canvas'); sheet.width = cols * this.gridWidth; sheet.height = rows * this.gridHeight;
         const ctx = sheet.getContext('2d');
         this.frames.forEach((_, idx) => {
             const frameCvs = this.generateFrameCanvas(idx), col = idx % cols, row = Math.floor(idx / cols);
-            ctx.drawImage(frameCvs, col * this.gridSize, row * this.gridSize);
+            ctx.drawImage(frameCvs, col * this.gridWidth, row * this.gridHeight);
         });
         const link = document.createElement('a'); link.download = `${name}-sheet.png`; link.href = sheet.toDataURL(); link.click();
     }
     exportGIF() {
         const name = this.getProjectName();
-        const encoder = new GIFEncoder(this.gridSize, this.gridSize), delay = 100 / this.fps * 10; 
+        const encoder = new GIFEncoder(this.gridWidth, this.gridHeight), delay = 100 / this.fps * 10; 
         this.frames.forEach((_, idx) => {
-            const cvs = this.generateFrameCanvas(idx), ctx = cvs.getContext('2d'), imgData = ctx.getImageData(0, 0, this.gridSize, this.gridSize);
+            const cvs = this.generateFrameCanvas(idx), ctx = cvs.getContext('2d'), imgData = ctx.getImageData(0, 0, this.gridWidth, this.gridHeight);
             encoder.addFrame(imgData, delay); 
         });
         const binary = encoder.generate(), blob = new Blob([binary], { type: 'image/gif' }), link = document.createElement('a');
@@ -1979,15 +1976,15 @@ class PixelEditor {
             
             const cvs = document.createElement('canvas'); 
             cvs.className = 'layer-preview'; 
-            cvs.width = this.gridSize; 
-            cvs.height = this.gridSize;
+            cvs.width = this.gridWidth; 
+            cvs.height = this.gridHeight;
             cvs.dataset.index = idx;
             
-            const ctx = cvs.getContext('2d'), imgData = ctx.createImageData(this.gridSize, this.gridSize), data = imgData.data, pixels = this.frames[this.currentFrameIndex][idx];
+            const ctx = cvs.getContext('2d'), imgData = ctx.createImageData(this.gridWidth, this.gridHeight), data = imgData.data, pixels = this.frames[this.currentFrameIndex][idx];
             for (const [key, p] of pixels) {
                 const [lx, ly] = key.split(',').map(Number);
-                if (lx >= 0 && lx < this.gridSize && ly >= 0 && ly < this.gridSize) {
-                    const b = (ly * this.gridSize + lx) * 4;
+                if (lx >= 0 && lx < this.gridWidth && ly >= 0 && ly < this.gridHeight) {
+                    const b = (ly * this.gridWidth + lx) * 4;
                     data[b] = p&0xFF; data[b+1]=(p>>8)&0xFF; data[b+2]=(p>>16)&0xFF; data[b+3]=255;
                 }
             }

@@ -52,8 +52,8 @@
                 <div class="dropdown-item" onclick="editor.pasteSelection()">Paste <span class="shortcut">Ctrl+V</span></div>
                 <div class="dropdown-divider"></div>
                 <div class="dropdown-item" onclick="editor.clearSelection()">Deselect <span class="shortcut">Ctrl+D</span></div>
-                <div class="dropdown-item" onclick="editor.frames[editor.currentFrameIndex][editor.currentLayerIndex].clear(); editor.render();">Clear Layer</div>
-                <div class="dropdown-item" onclick="editor.clearCanvas()">Clear Canvas</div>
+                <div class="dropdown-item" onclick="editor.clearLayer()">Clear Current Layer</div>
+                <div class="dropdown-item" onclick="editor.clearCanvas()">Clear All Layers (Frame)</div>
             </div>
         </div>
 
@@ -105,7 +105,7 @@
 
                         <div class="wallet-dropdown">
 
-                            <button id="connect-wallet-btn" class="small-btn" style="background: var(--primary);">Connect Wallet</button>
+                            <button id="connect-wallet-btn" class="small-btn" style="background: var(--primary);" disabled title="Solana integration coming soon in Alpha 2.0">Connect Wallet</button>
 
                             <div id="wallet-menu" class="dropdown-menu" style="right: 0; left: auto; top: 30px;">
 
@@ -316,6 +316,7 @@
                 <div class="section-header">Edit & Colors</div>
                 <div class="shortcut-row"><span>Undo / Redo</span> <div class="keys"><span class="key">Ctrl+Z</span> <span class="key">Ctrl+Y</span></div></div>
                 <div class="shortcut-row"><span>Cut / Copy / Paste</span> <div class="keys"><span class="key">Ctrl+X</span> <span class="key">Ctrl+C</span> <span class="key">Ctrl+V</span></div></div>
+                <div class="shortcut-row"><span>Save Project</span> <span class="key">Ctrl+S</span></div>
                 <div class="shortcut-row"><span>Deselect</span> <span class="key">Ctrl+D</span> / <span class="key">Esc</span></div>
                 <div class="shortcut-row"><span>Swap Colors</span> <span class="key">X</span></div>
             </div>
@@ -325,7 +326,7 @@
                 <div class="shortcut-row"><span>Play / Pause</span> <span class="key">Space</span></div>
                 <div class="shortcut-row"><span>Prev / Next Frame</span> <div class="keys"><span class="key">,</span> <span class="key">.</span></div></div>
                 <div class="shortcut-row"><span>Zoom In / Out</span> <div class="keys"><span class="key">+</span> <span class="key">-</span></div></div>
-                <div class="shortcut-row"><span>Toggle Grid</span> <span class="key">#</span></div>
+                <div class="shortcut-row"><span>Zoom (Mouse)</span> <span class="key">Ctrl + Scroll</span></div>
             </div>
         </div>
     </div>
@@ -458,7 +459,7 @@
     <div class="modal-content" style="text-align: center;">
         <div class="panel-title">About PixelForge <button class="small-btn" onclick="this.closest('.modal').classList.remove('open')">×</button></div>
         <div style="font-size: 1.5rem; color: var(--primary); font-weight: bold; margin: 15px 0;">PixelForge</div>
-        <div style="margin-bottom: 20px;">Version 1.0.0</div>
+        <div style="margin-bottom: 20px;">Alpha 0.1</div>
         
         <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
             <a href="https://pixelforge.art" target="_blank" style="color: var(--primary-hover); text-decoration: none;">🌐 pixelforge.art</a>

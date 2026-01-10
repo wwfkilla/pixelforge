@@ -276,6 +276,14 @@ button {
 
 button:hover { background-color: #4a4a52; }
 button:active { transform: translateY(1px); }
+button:disabled { 
+    background-color: #2a2a30 !important; 
+    color: var(--text-muted) !important; 
+    border-color: #333 !important; 
+    cursor: not-allowed !important; 
+    transform: none !important;
+    opacity: 0.6;
+}
 button.active { background-color: var(--primary); border-color: var(--primary); }
 button.small-btn { padding: 2px 6px; font-size: 0.8rem; }
 
@@ -589,9 +597,23 @@ select, input[type="number"], input[type="text"] {
 
 .shortcuts-container {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 20px;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px 40px;
     margin-top: 15px;
+}
+
+/* Make the last section (Animation & View) span full width for balance */
+.shortcut-section:last-child {
+    grid-column: span 2;
+}
+
+@media (max-width: 500px) {
+    .shortcuts-container {
+        grid-template-columns: 1fr;
+    }
+    .shortcut-section:last-child {
+        grid-column: span 1;
+    }
 }
 
 .shortcut-section {
